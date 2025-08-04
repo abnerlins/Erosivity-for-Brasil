@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>EI-30 - Erosividade média mensal (2014-2024)</title>
+  <link rel="stylesheet" href="./style.css">
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<html>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+  <head>
+    <meta charset="utf-8" />
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.29/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.29/"></script>
+   
+    <div id="header">
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQorMbLac7sLWsB8gdR7ZaPRwzpz6bnZ6q8w&s" id="headerLogo" />
+  <div id="headerCenter">
+    <span id="appTitle">Month-Erosivity</span><br>
+    <span id="headerInstruction">App para obter estatísticas das médias mensais. Clique em um bioma para visualizar o gráfico de erosividade média mensal.</span>
+  </div>
+  <div id="headerRight">Dev: Abner Lins Silva - UFPB</div>
+</div>
+
+    <style>
+      html,
+      body,
+      
+      
+      
+#viewDiv {
+  position: absolute;
+  top: 0px; 
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+
+      .esri-time-slider__time-extent {
+        display: none !important;
+      }
+
+      .esri-time-slider__min,
+      .esri-time-slider__max {
+        display: none !important;
+      }
+
+      
+      .esri-time-slider {
+        background: transparent !important;
+        border: none !important;
+      }
+
+      #infoPanel {
+        position: absolute;
+        top: 100px;
+        right: 10px;
+        z-index: 99;
+        background: white;
+        padding: 8px;
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+      
+
+    </style>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+    <div id="infoPanel">Clique em um bioma</div>
+    
+    <div id="legendPanel">
+      <strong>Legenda:</strong><br>
+      <div class="legend-item" style="background-color: #ff4242;">Muito Baixa</div>
+      <div class="legend-item" style="background-color: #fc6e6e;">Baixa a Moderada</div>
+      <div class="legend-item" style="background-color: #f5c6c7;">Forte</div>
+      <div class="legend-item" style="background-color: #c5d9ec;">Moderada a Forte</div>
+      <div class="legend-item" style="background-color: #6aa6dd;">Muito Forte</div>
+    </div>    
+    <div id="chartContainer">
+  <canvas id="chartCanvas" width="400" height="300"></canvas>
+  <button id="closeChartBtn">✕</button>
+</div>
+
+    
+    
+    <div id="chartContainer">
+  </div>
+    
+    
+
+<script>
+  document.getElementById("closeChartBtn").addEventListener("click", () => {
+    document.getElementById("chartContainer").style.display = "none";
+  });
+</script>
+
+    <script>
+      
+      const canvas = document.getElementById("chartCanvas");
+      canvas.style.position = "absolute";
+      canvas.style.bottom = "20px";
+      canvas.style.right = "20px";
+      canvas.style.backgroundColor = "white";
+      canvas.style.border = "1px solid #aaa";
+      canvas.style.boxShadow = "0 2px 5px rgba(0, 0, 0, 0.2)";
+      canvas.style.padding = "8px";
+      canvas.style.zIndex = "99";
+
+
+      canvas.width = 400;
+      canvas.height = 300;
+      
+      require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/ImageryLayer",
+        "esri/layers/FeatureLayer",
+        "esri/widgets/TimeSlider",
+        "esri/TimeExtent",
+        "esri/layers/support/Field"
+      ], function (
+        Map,
+        MapView,
+        ImageryLayer,
+        FeatureLayer,
+        TimeSlider,
+        TimeExtent,
+        Field
+      ) {
+        const months = Array.from({ length: 12 }, (_, i) =>
+          `https://geoserver.ct.ufpb.br/arcgis/rest/services/EROSIVITYDATA/EI30_month${String(i + 1).padStart(2, '0')}/ImageServer`
+        );
+        
+        const biomaDictionary = {
+          "Amazônia": "AM",
+          "Caatinga": "CA",
+          "Cerrado": "CE",
+          "Mata Atlântica": "MA",
+          "Pampa": "PAM",
+          "Pantanal": "PAN"
+        };
+
+        const muitoBaixa = {
+          type: "simple-fill",
+          color: "#ff4242",
+          style: "solid",
+          outline: { width: 0.2, color: [255, 255, 255, 0.5] },
+        };
+
+        const baixaModerada = {
+          type: "simple-fill",
+          color: "#fc6e6e",
+          style: "solid",
+          outline: { width: 0.2, color: [255, 255, 255, 0.5] },
+        };
+        const forte = {
+          type: "simple-fill",
+          color: "#f5c6c7",
+          style: "solid",
+          outline: { width: 0.2, color: [255, 255, 255, 0.5] },
+        };
+        const moderadaForte = {
+          type: "simple-fill",
+          color: "#c5d9ec",
+          style: "solid",
+          outline: { width: 0.2, color: [255, 255, 255, 0.5] },
+        };
+
+        const muitoForte = {
+          type: "simple-fill",
+          color: "#6aa6dd",
+          style: "solid",
+          outline: { width: 0.2, color: [255, 255, 255, 0.5] },
+        };
+
+        const renderer = {
+          type: "class-breaks",
+          field: "COL_DEG",
+          normalizationField: "EDUCBASECY",
+          legendOptions: {
+            title: "erosivity level",
+          },
+          defaultSymbol: {
+            type: "simple-fill",
+            color: "black",
+            style: "backward-diagonal",
+            outline: {
+              width: 0.5,
+              color: [50, 50, 50, 0.6],
+            },
+          },
+          defaultLabel: "no data",
+          classBreakInfos: [
+            { minValue: -100, maxValue: 50, symbol: muitoBaixa, label: "muitoBaixa" },
+            { minValue: 50, maxValue: 500, symbol: baixaModerada, label: "baixaModerada" },
+            { minValue: 500, maxValue: 750, symbol: forte, label: "forte" },
+            { minValue: 750, maxValue: 1500, symbol: moderadaForte, label: "moderadaForte" },
+            { minValue: 1500, maxValue: 4000, symbol: muitoForte, label: "muitoForte" },
+          ],
+        };
+
+        const monthLayers = months.map((url, index) =>
+          new ImageryLayer({
+            url,
+            visible: index === 0,
+            renderer: renderer,
+          })
+        );
+
+        const map = new Map({
+          basemap: "topo",
+          layers: monthLayers
+        });
+
+        const view = new MapView({
+          container: "viewDiv",
+          map: map,
+          center: [-53, -14],
+          zoom: 4
+        });
+
+        view.when(() => {
+
+          
+          const biomaLayer = new FeatureLayer({
+            url: "https://geoserver.ct.ufpb.br/arcgis/rest/services/PPGECAM2025/ErosivityStats/FeatureServer/0",
+            outFields: ["*"],
+             opacity: 0.2
+          });
+          const biomaLayerStas = new FeatureLayer({
+            url: "https://geoserver.ct.ufpb.br/arcgis/rest/services/PPGECAM2025/ErosivityStats/FeatureServer/1",
+            outFields: ["*"]
+          });
+
+
+          
+          map.add(biomaLayer);
+          
+
+
+          // ON CLICK -
+          view.on("click", function (event) {
+            view.hitTest(event).then(function (response) {
+              const results = response.results;
+
+              const biomaFeature = results.find(
+                (result) => result.graphic.layer === biomaLayer
+              );
+
+              // SE ALGUM BIOMA FOR SELECIONADO:
+              if (biomaFeature) {
+                const nomeBioma = biomaFeature.graphic.attributes.bioma;
+                document.getElementById("infoPanel").innerText = `Bioma: ${nomeBioma}`;
+
+                // 🔹 LIMPAR DESTACADOS ANTERIORES
+                view.graphics.removeAll();
+
+                // 🔹 ADICIONAR BORDA DESTAQUE AO BIOMA CLICADO
+                const highlightGraphic = biomaFeature.graphic.clone();
+                highlightGraphic.symbol = {
+                  type: "simple-fill",
+                  color: [0, 0, 0, 0],  // Transparente
+                  style: "solid",
+                  outline: {
+                    color: [255, 165, 0, 1] ,
+                    width: 2
+                  }
+                };
+                view.graphics.add(highlightGraphic);
+
+                  document.getElementById("infoPanel").innerText = `Bioma: ${nomeBioma}`;
+
+                  const query = biomaLayerStas.createQuery();
+                  const siglaBioma = biomaDictionary[nomeBioma];
+                  query.where = `bioma = '${siglaBioma}'`;
+                  console.log("Consulta SQL:", query.where);
+
+                  // QUARY
+                  biomaLayerStas.queryFeatures(query).then(function (results) {
+                    console.log("Resultados filtrados:", results.features);
+                    
+                  // GRÁFICO
+                    
+                    const features = results.features;
+                      const valoresMean = features.map(f => f.attributes.mean);
+                      const labels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+                      // SE HOUVER UM GRAFICO ELE DESTRÓI
+                      if (window.chartInstance) {
+                        window.chartInstance.destroy();
+                      }
+document.getElementById("chartContainer").style.display = "block";
+
+  
+                      const ctx = document.getElementById("chartCanvas").getContext("2d");
+                      window.chartInstance = new Chart(ctx, {
+                        type: "bar",
+                        data: {
+                          labels: labels,
+                          datasets: [{
+                            label: `Erosividade média mensal - ${nomeBioma}`,
+                            data: valoresMean,
+                            backgroundColor: "rgba(54, 162, 235, 0.6)",
+                            borderColor: "rgba(54, 162, 235, 1)",
+                            borderWidth: 1
+                          }]
+                        },
+                        options: {
+                          responsive: false,
+                          plugins: {
+                            legend: { display: true },
+                            tooltip: {
+                              callbacks: {
+                                label: context => `EI30: ${context.parsed.y.toFixed(2)}`
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              title: { display: true, text: "EI30 (mean)" }
+                            },
+                            x: {
+                              title: { display: true, text: "Mês" }
+                            }
+                          }
+                        }
+                      });
+
+
+                  });
+           // SE NENHUM BIOMA FOR SELECIONADO:
+                } else {
+                  document.getElementById("infoPanel").innerText = "Nenhum bioma encontrado.";
+                }
+
+            });
+          });
+
+          const timeSlider = new TimeSlider({
+            container: document.createElement("div"),
+            view: view,
+            mode: "instant",
+            fullTimeExtent: new TimeExtent({
+              start: new Date(2024, 0, 1),
+              end: new Date(2024, 11, 31),
+            }),
+            stops: {
+              interval: { value: 1, unit: "months" }
+            },
+            tickConfigs: [{
+              mode: "position",
+              values: Array.from({ length: 12 }, (_, i) => new Date(2024, i, 1)),
+              labelsVisible: true,
+              labelFormatFunction: (value) => {
+                const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+                return months[value.getMonth()];
+              }
+            }]
+          });
+
+          view.ui.add(timeSlider, "bottom-left");
+
+          timeSlider.watch("timeExtent", (value) => {
+            const currentMonth = value.start.getMonth();
+            monthLayers.forEach((layer, i) => {
+              layer.visible = i === currentMonth;
+            });
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
+<!-- partial -->
+  
+</body>
+</html>
