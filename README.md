@@ -31,4 +31,10 @@ An interactive map is available to visualize monthly erosivity statistics by bio
 4. Spatial interpolation (Kriging)
 5. Visualization through interactive web maps
 
-![EI30 Viewer Screenshot](Captura de tela 2025-08-04 130823.png)
+# Erosivity Analysis and Mapping
+
+...
+
+## 🖼️ Preview
+
+![EI30 Viewer Screenshot](data/screenshot.png)
